@@ -1,240 +1,342 @@
-#include <iostream>
-#include <string>
-#include <stdexcept>
-#include <thread>
 #include <chrono>
+#include <cstdint>
+#include <exception>
+#include <iostream>
+#include <random>
+#include <string>
 #include "Chip8.h"
 
-#define V0 (V[0x0])
-#define VX (V[opc[1]])
-#define VY (V[opc[2]])
-#define VF (V[0xF])
+// Register file
+RegisterFile::RegisterFile()
+{
+    for (int i = 0; i < 16; i++) {
+	registers[i] = 0;
+    }
+}
+
+void RegisterFile::saveRange(int lastReg,  uint16_t addr, MemoryFile& mem)
+{
+    for (int i = 0; i < lastReg; i++) {
+        mem[addr+i] = registers[i];
+    }
+}
+
+void RegisterFile::loadRange(int lastReg,  uint16_t addr, MemoryFile& mem)
+{
+    for (int i = 0; i < lastReg; i++) {
+        registers[i] = mem[addr+i];
+    }
+}
 
 /*
  *  Implementation of Chip 8 Machine
  */
 Chip8::Chip8()
+    : re(std::random_device{}()), dist(0x00, 0xFF)
 {
-    // Clear registers
-    for (int i = 0; i < 16; i++) {
-	V[i] = 0;
+    // Set up fontset
+    uint8_t font[] =
+        {
+            0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+            0x20, 0x60, 0x20, 0x20, 0x70, // 1
+            0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+            0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+            0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+            0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+            0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+            0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+            0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+            0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+            0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+            0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+            0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+            0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+            0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+            0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+        };
+    
+    for (int i = 0; i < 16 * 5; i++) {
+        memFile[i] = font[i];
     }
-
-    // Clear stack
-    for (int i = 0; i < 16; i++) {
-	stack[i] = 0;
-    }
-
+    
     // Start timers
-    delaytimer.count = 0;
-    dtthread = std::thread(countdown, std::ref(delaytimer), std::ref(runtimers));
-    soundtimer.count = 0;
-    stthread = std::thread(countdown, std::ref(soundtimer), std::ref(runtimers));
-
-    // Seed the rng
-    re.seed(rd());
+    delayTimer = 0;
+    soundTimer = 0;
 }
 
+/*
 Chip8::~Chip8()
 {
-    std::cout << "Stopping timers" << std::endl;
-    runtimers = false;
-    dtthread.join();
-    stthread.join();
-    std::cout << "Stopped timers" << std::endl;
+    
 }
+*/
 
-
-int Chip8::exec(Opcode opc)
+int Chip8::exec(uint16_t opc)
 {
     unsigned char temp;
+
+    int X = (opc & 0x0F00) >> 8, Y = (opc & 0x00F0) >> 4;
+    uint8_t &V0 = regFile[0x0], &VX = regFile[X], &VY = regFile[Y], &VF = regFile[0xF];
+    uint16_t& I = regFile.I();
+    uint8_t N = opc & 0x000F;
+    uint8_t NN = opc & 0x00FF;
+    uint16_t NNN = opc & 0x0FFF;
     
-    switch (opc[0]) {
-    case 0x0:
-	switch(opc(1,4)) {
-	case 0x0E0:
-	    screen.clear();
-	    draw = true;
-	    break;
-	case 0x0EE:
-	    sp--;
-	    pc = *sp;
-	    pcinc = false;
-	    break;
-	default:
-	    return -1;
-	}
-	break;
-    case 0x1:
-	pc = opc(1,4);
-	pcinc = false;
-	break;
-    case 0x2:
-	*sp = pc+2;
-	sp++;
-	pc = opc(1,4);
-	pcinc = false;
-	break;
-    case 0x3:
-	if (VX == opc(2,4))
-	    pc += 2;
-	break;
-    case 0x4:
-	if (VX != opc(2,4))
-	    pc += 2;
-	break;
-    case 0x5:
-	if (VX == VY)
-	    pc += 2;
-	break;
-    case 0x6:
-	VX = opc(2,4);
-	break;
-    case 0x7:
-	VX += opc(2,4);
-	break;
-    case 0x8:
-	switch (opc[3]) {
-	case 0x0:
-	    VX == VY;
-	    break;
-	case 0x1:
-	    VX |= VY;
-	    break;
-	case 0x2:
-	    VX &= VY;
-	    break;
-	case 0x3:
-	    VX ^= VY;
-	    break;
-	case 0x4:
-	    VX += VY;
-	    (VX < VY) ? VF = 0x00 : VF = 0x01;
-	    break;
-	case 0x5:
-	    temp = VX;
-	    VX -= VY;
-	    (VX > temp) ? VF = 0x00 : VF = 0x01;
-	    break;
-	case 0x6:
-	    VF = VY & 0x01;
-	    VX = VY >> 1;
-	    break;
-	case 0x7:
-	    VX = VY - VX;
-	    (VX > VY) ? VF = 0x00 : VF = 0x01;
-	    break;
-	case 0xE:
-	    VF = VY & 0x80;
-	    VX = VY << 1;
-	    break;
-	default:
-	    return -1;
-	}
-    case 0x9:
-	if (VX != VY)
-	    pc += 2;
-	break;
-    case 0xA:
-	I = opc(1,4);
-	break;
-    case 0xB:
-	pc = opc(1,4) + V0;
-	pcinc = false;
-	break;
-    case 0xC:
-	VX = dist(re) & opc(2,4);
-	break;
-    case 0xD:
-	VF = screen.drawsprite(VX, VY, &memory[I], opc[3]);
-	draw = true;
-	break;
-    case 0xE:
-	// ******To be implemented******
-	// The instructions in the 0xE000 range handle keyboard input
-	break;
-    case 0xF:
-	switch (opc(2,4)) {
-	case 0x07:
-	    delaytimer.mtx.lock();
-	    VX = delaytimer.count;
-	    delaytimer.mtx.unlock();
-	    break;
-	case 0x0A:
-	    // ******To be implemented******
-	    // This instruction handles keyboard input
-	    break;
-	case 0x15:
-	    delaytimer.mtx.lock();
-	    delaytimer.count = VX;
-	    delaytimer.mtx.unlock();
-	    break;
-	case 0x18:
-	    soundtimer.mtx.lock();
-	    soundtimer.count = VX;
-	    soundtimer.mtx.unlock();
-	    break;
-	case 0x1E:
-	    I += VX;
-	    break;
-	case 0x29:
-	    (VX <= 0x0F) ? I = 0x50 + 5*VX : I = 0x50;
-	    break;
-	case 0x33:
-	    // Binary coded decimal
-	    memory[I] = VX/100;
-	    memory[I+1] = (VX%100)/10;
-	    memory[I+2] = VX%10;
-	    break;
-	case 0x55:
-	    for (int i = 0; i <= opc[1]; i++)
-		memory[I+i] = V[i];
-	    I += opc[1] + 1;
-	    break;
-	case 0x65:
-	    for (int i = 0; i <= opc[1]; i++)
-		V[i] = memory[I+i];
-	    I += opc[1] + 1;
-	    break;
-	default:
-	    return -1;
-	}
-	break;
+    switch (opc & 0xF000) {
+    case 0x0000:
+        switch (opc & 0x0FFF) {
+        case 0x00E0:
+            // 00E0 - Clear screen
+            screen.clear();
+            draw = true;
+            break;
+        case 0x00EE:
+            // 00EE - Return from a subroutine
+            pc = memFile[sp] << 8 | memFile[sp+1];
+            sp += 2;
+            break;
+        case 0x0000:
+            // 0NNN - execute machine language subroutine at address NNN
+            // not implemented
+            return 2;
+            break;
+        default:
+            return 1;
+        }
+        break;
+    case 0x1000:
+        // 1NNN - jump to address NNN
+        pc = NNN;
+        pcInc = false;
+        break;
+    case 0x2000:
+        // 2NNN - execute subroutine at NNN
+        sp -= 2;
+        memFile[sp] = pc >> 8;
+        memFile[sp+1] = pc & 0x00FF;
+	pc = NNN;
+        pcInc = false;
+        break;
+    case 0x3000:
+        // 3XNN - skip next instruction if VX = NN
+        if (VX == NN)
+            pc += 2;
+        break;
+    case 0x4000:
+        // 4XNN - skip next instruction if VX != NN
+        if (VX != NN)
+            pc += 2;
+        break;
+    case 0x5000:
+        // 5XY0 - skip next instruction if VX = VY
+        if (VX == VY)
+            pc += 2;
+        break;
+    case 0x6000:
+        // 6XNN - store number NN in VX
+        VX = NN;
+        break;
+    case 0x7000:
+        // 7XNN - add value NN to VX
+        VX += NN;
+        break;
+    case 0x8000:
+        switch (opc & 0x000F) {
+        case 0x0000:
+            // 8XY0 - store value of VY in VX
+            VX = VY;
+            break;
+        case 0x0001:
+            // 8XY1 - set VX to VX or VY
+            VX |= VY;
+            break;
+        case 0x0002:
+            // 8XY2 - set VX to VX and VY
+            VX &= VY;
+            break;
+        case 0x0003:
+            // 8XY3 - set VX to VX xor VY
+            VX ^= VY;
+            break;
+        case 0x0004:
+            // 8XY4 - set VX to VX + VY
+            VX += VY;
+            VF = (VX < VY) ? 1 : 0;
+            break;
+        case 0x0005:
+            // 8XY5 - set VX to VX - VY
+            VF = (VX < VY) ? 0 : 1;
+            VX -= VY;
+            break;
+        case 0x0006:
+            // 8XY6 - set VX to VY >> 1    
+            VF = (VY << 15) >> 15;
+            VX >>= VY;
+            break;
+        case 0x0007:
+            // 8XY7 - set VX to VY - VX
+            VF = (VX > VY) ? 0 : 1;
+            VX = VY - VX;
+            break;
+        case 0x000E:
+            // 8XYE - set VX to VY << 1
+            VF = VY >> 15;
+            VX <<= VY;
+            break;
+        default:
+            return 1;
+        }
+        break;
+    case 0x9000:
+        // 9XY0 - skip next instruction if VX != VY
+        if (VX != VY)
+            pc += 2;
+        break;
+    case 0xA000:
+        // ANNN - Store memory address NNN in I
+        I = NNN;
+        break;
+    case 0xB000:
+        // BNNN - jump to address NNN + V0
+        pc = NNN + V0;
+        pcInc = false;
+        break;
+    case 0xC000:
+        // CXNN - generate a random number with mask NN
+        VX = dist(re) & NN;
+        break;
+    case 0xD000:
+        // DXYN - Draw sprite of length N at coordinates (VX, VY)
+        VF = screen.drawsprite(VX, VY, N, &memFile[I]);
+        draw = true;
+        break;
+    case 0xE000:
+        switch (opc & 0x00FF) {
+        case 0x009E:
+            // EX9E - skip next instruction if key in VX is pressed
+            // to be implemented
+            return 2;
+            break;
+        case 0x00A1:
+            // EXA1 - skip next instruction if key in VX is not pressed
+            // to be implemented
+            return 2;
+            break;
+        default:
+            return 1;
+        }
+        break;
+    case 0xF000:
+        switch (opc & 0x00FF) {
+        case 0x0007:
+            // FX07 - Store the current value of the delay timer in VX
+            VX = delayTimer;
+            break;
+        case 0x000A:
+            // FX0A - wait for a keypress and store in register VX
+            // to be implemented
+            return 2;
+            break;
+        case 0x0015:
+            // FX15 - set the delay timer to VX
+            delayTimer = VX;
+            break;
+        case 0x0018:
+            // FX18 - Set the sound timer to VX
+            soundTimer = VX;
+            break;
+        case 0x001E:
+            // FX1E - add VX to I
+            I += VX;
+            break;
+        case 0x0029:
+            // FX29 - set I to the memory address of the sprite of the character in VX
+            I = VX * 5;
+            break;
+        case 0x0033:
+            // FX33 - store the BCD of VX in I, I+1, I+2
+            memFile[I] = VX / 100;
+            memFile[I+1] = (VX % 100) / 10;
+            memFile[I+2] = VX % 10;
+            break;
+        case 0x0055:
+            // FX55 - store the values of V0 to VX starting at I
+            regFile.saveRange(X, I, memFile);
+            break;
+        case 0x0065:
+            // FX65 load from I to I+X+1 into registers V0 to VX
+            regFile.loadRange(X, I, memFile);
+            break;
+        default:
+            return 1;
+        }
+        break;
     default:
-	return -1;
+        return 1;
     }
-    return 0;
+
+    return -1;
 }
 
 // At some point sound timer functionality needs to be added
-int Chip8::cycle()
+int Chip8::run()
 {
-    using namespace std::chrono_literals;
-    auto cycle_end = std::chrono::system_clock::now() + 1666667ns; //real cycle length
-    
-    Opcode o = memory.getop(pc);
+    auto nextCycleTime = std::chrono::high_resolution_clock::now();
+    int tenCycle = 10;
 
-    if (o(0,4) == 0x0000) {
-	std::cout << "0x0000 hit, ending run" << std::endl;
-	return 0;
+    while (true) {
+        // busy wait loop
+        while (std::chrono::high_resolution_clock::now() < nextCycleTime)
+            ;
+        nextCycleTime += CYCLE_TIME;
+
+        /*
+        for (int i = 0; i < 16; i++) {
+            std::cout << "V" << i << ": " << std::hex << (int)regFile[i] << std::endl;
+        }
+        */
+        
+        // Fetch instruction
+        uint16_t opc = (((uint16_t)memFile[pc]) << 8) | memFile[pc+1];
+
+        // Should be removed at some point
+        if (opc == 0x0000) {
+            std::cout << "0x0000 hit at address " << std::hex << pc << ", ending run" << std::endl;
+            return 0;
+        }
+
+        int result = exec(opc);
+        if (result == 1) {
+            std::cout << "Invalid Chip 8 instruction 0x" << std::hex << opc << " at address " << std::hex << pc << std::endl;
+            throw std::exception{};
+        } else if (result == 2) {
+            std::cout << "Chip 8 instruction 0x" << std::hex << opc << " at address " << std::hex << pc << " not yet implemented" << std::endl;
+            throw std::exception{};
+        }
+
+
+        tenCycle--;
+        if (tenCycle == 0) {
+            // Draw if anything to draw
+            if (draw) {
+                screen.updatescreen();
+                draw = false;
+            }
+            // Decrement Timers
+            if (delayTimer > 0)
+                delayTimer--;
+            if (soundTimer > 0)
+                soundTimer--;
+            // reset
+            tenCycle = 10;
+        }
+        
+        // increment 
+        if (pcInc)
+            pc += 2;
+        else
+            pcInc = true;
     }
-    
-    if (exec(o) < 0) {
-	std::cout << "Invalid Chip 8 instruction 0x" << o.prettyprint() << " at address " << std::hex << pc << std::endl;
-	throw std::exception{};
-    }
-    
-    if (draw) {
-	screen.updatescreen();
-	draw = false;
-    }
-    
-    if (pcinc)
-	pc += 2;
-    else
-	pcinc = true;
-    
-    std::this_thread::sleep_until(cycle_end);
     return 1;
 }
 
@@ -244,57 +346,8 @@ int Chip8::loadprogram(std::string filename)
     return -1;
 }
 
-void Chip8::store(unsigned char* bytes, unsigned short bytecount, unsigned short addr)
+void Chip8::store(uint8_t* bytes, int bytecount, int addr)
 {
     for (int i = 0; i < bytecount; i++)
-	memory[addr+i] = bytes[i];
-}
-
-
-/*
- *  Implementation of Opcode type
- */
-
-Opcode::Opcode()
-    : code {0x0}
-{}
-
-Opcode::Opcode(unsigned short c)
-    : code {c}
-{}
-
-unsigned short Opcode::operator[](unsigned short i)
-{
-    if (i >= 0 && i < 4)
-	return (code >> (12 - i*4)) & 0x000F;
-    else
-	throw std::out_of_range{"Opcode::operator[]"};
-}
-
-unsigned short Opcode::operator()(unsigned short h, unsigned short l)
-{
-    if (h > l || h < 0 || l > 4)
-	throw std::out_of_range{"Opcode::operator()"};
-    
-    unsigned short mask = 0x0;
-    for (int i = 0; i < l-h; i++) {
-	mask <<= 4;
-	mask |= 0b1111;
-    }
-    
-    return (code >> (16 - l*4)) & mask;
-}
-
-std::string Opcode::prettyprint()
-{
-    std::string pretty = "";
-    for (int i = 0; i < 4; i++) {
-	char c = (code >> (12 - 4*i)) & 0x000F;
-	if (c <= 0x9)
-	    c += '0';
-	else
-	    c += 'A' - 0xA;
-	pretty += c;
-    }
-    return pretty;
+	memFile[addr+i] = bytes[i];
 }

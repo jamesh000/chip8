@@ -1,92 +1,81 @@
 #include <random>
 #include <thread>
 #include <mutex>
+#include <thread>
+#include <chrono>
+#include <cstdint>
 
-// Wraps a unsigned short with some useful functions
-class Opcode {
+constexpr std::chrono::nanoseconds CYCLE_TIME(1666667);
+
+// Implements Chip 8 style memory
+class MemoryFile {
 public:
-    Opcode();
-    Opcode(unsigned short c);
+    MemoryFile();
 
-    unsigned short operator[](unsigned short i);
-    unsigned short operator()(unsigned short h, unsigned short l);
-    std::string prettyprint();
+    uint8_t& operator[](uint16_t addr);
 private:
-    unsigned short code;
+    uint8_t mem[4096];
 };
-
 
 // Implements a Chip 8 style display
 class Display {
 public:
     Display();
-
+    
     void clear();
-    unsigned char drawsprite(unsigned short x, unsigned short y, const unsigned char *sprite, unsigned short bytecount);
+    uint8_t drawsprite(int x, int y, int len, const uint8_t *sprite);
     void updatescreen();
 private:
-    unsigned char display[64][32];
+    uint64_t display[32];
 };
 
-
-// Implements Chip 8 style memory
-class Memory {
+class RegisterFile {
 public:
-    Memory();
+    RegisterFile();
 
-    unsigned char& operator[](unsigned short addr);
-    Opcode getop(unsigned short address);
+    uint8_t& operator[](int regIndex) { return registers[regIndex]; }
+    uint16_t& I() { return memReg; }
+    void saveRange(int lastReg, uint16_t addr, MemoryFile& mem);
+    void loadRange(int lastReg, uint16_t addr, MemoryFile& mem);
 private:
-    unsigned char mem[4096];
+    uint8_t registers[16];
+    uint16_t memReg;
 };
-
-
-// Implements a Chip 8 style timer
-struct Timer {
-    unsigned char count;
-    std::mutex mtx;
-};
-
-void countdown(Timer& t, bool& run);
-
 
 // The Chip 8 interpreter
 class Chip8 {
 public:
     Chip8();
-    ~Chip8();
+    //~Chip8();
 
-    int exec(Opcode opc);
     int loadprogram(std::string filename);
-    void store(unsigned char* bytes, unsigned short bytecount, unsigned short addr);
-    int cycle();
+    void store(uint8_t* bytes, int bytecount, int addr);
+    int run();
 private:
+    // Instruction execution
+    int exec(uint16_t opc);
+
     // Registers
-    unsigned char V[16];
-    unsigned short pc = 0x200;
-    unsigned short I = 0x000;
-
+    uint16_t pc = 0x200;
+    uint16_t I = 0x000;
+    
     // Memory and display
-    Memory memory;
+    RegisterFile regFile;
+    MemoryFile memFile;
     Display screen;
-
-    // Stack
-    unsigned short stack[16];
-    unsigned short* sp = &stack[0];
-
+    
+    // Stack starts at 0x200 and grows down
+    uint16_t sp = 0x200;
+    
     // Delay timer and sound timer
-    bool runtimers = true;
-    Timer delaytimer;
-    std::thread dtthread;
-    Timer soundtimer;
-    std::thread stthread;
-
+    uint8_t delayTimer;
+    uint8_t soundTimer;
+    
     // Draw flag and program counter update flag
     bool draw = true;
-    bool pcinc = true;
-
+    bool pcInc = true;
+    
     // For random number generation by CXXX opcode
-    std::random_device rd;
-    std::default_random_engine re;
-    std::uniform_int_distribution<int> dist {0x0, 0xFF};
+    std::mt19937 re;
+    std::uniform_int_distribution<std::mt19937::result_type> dist; // distribution in range [1, 6]
 };

@@ -1,4 +1,9 @@
-# chip8
-Chip8 Emulator in C++
+# Chip8 Interpreter
 
-Not really finished. I wrote all the basics out a long time ago, I will go back and fix the the interface and add a proper graphical frontend one day. Also refactor.
+It's a chip8 interpreter written in C++, what else can you say. Currently finishing it.
+Just run `make` to build it. Currently no good mechanism for loading programs.
+
+- [X] Core refactor
+- [ ] Quality of Life (loading commands, psuedo-assembler)
+- [ ] Graphical Interface
+- [ ] Implement all commands
