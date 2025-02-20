@@ -1,40 +1,33 @@
+#include <cstdint>
 #include <iostream>
 #include "Chip8.h"
 
 int main()
 {
-    Chip8 c;
+    Chip8 cpu;
 
-    unsigned char A[5] {0xF0, 0x90, 0xF0, 0x90, 0x90};
-
-    unsigned char prog[] = {
-	// 0x200
-	0x12, 0x10,  // Reserve 16 bytes
-	0x00, 0xE0,  // 0 - Clear the screen
-	0xC1, 0xFF,  // 2 - Random number in V1
-	
-	0xF1, 0x33,  // Store
-	0xF1, 0x29,  // 4 - Set I to position of hex character in V1
-	0xC2, 0x3A,  // 6 - Set V2 to random x coordinate
-	0xC3, 0x1B,  // 8 - Set V3 to random y coordinate
-	0xD2, 0x35,  // A - Draw hex char in V1 to coordinates in V2 and V3
-	0x3F, 0x01,  // C - Skip the jump if there was a collision
-	0x12, 0x02,  // E - Jump to beginning
-	// 0x210
-	0xD2, 0x35,  // 0 - Fix collision
-	0x22, 0x16,  // 2 - Waste a second
-	0x12, 0x00,  // 4 - Total reset
-	// subroutine to wait out the delay timer
-	0xFA, 0x07,  // Set FA to the value of the delay timer
-	0x3A, 0x00,  // Skip the following instruction if FA is 0
-	0x12, 0x1A,  // Restart the loop
-	0x00, 0xEE   // Return to caller
+    uint8_t prog2[] = {
+        // 0x200
+        0x00, 0xE0, // 0 - clear screen
+        0xC1, 0x0F, // 2 - random number from 0-F in V1
+        0xF1, 0x29, // 4 - get character font in V1
+        0xC2, 0x3F, // 6 - random number from 0-63 in V2
+        0xC3, 0x1F, // 8 - random number from 0-31 in V3
+        0xD2, 0x35, // a - draw character
+        0x22, 0x10, // c - time killer subroutine
+        0x12, 0x00, // e - restart
+        // 0x210
+        0x64, 0x3C, // 0 - load 60 into V4
+        0xF4, 0x15, // 2 - move VA into delay timer
+        0xF4, 0x07, // 4 - store delay timer value in V4
+        0x34, 0x00, // 6 - if not zero, loop again
+        0x12, 0x14, // 8 - loop
+        0x00, 0xEE, // a - otherwise, return
     };
 
-    c.store(prog, sizeof(prog), 0x200);
+    cpu.store(prog2, sizeof(prog2), 0x200);
 
-    while (c.cycle())
-	;
+    cpu.run();
 
     return 0;
 }

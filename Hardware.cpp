@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <iostream>
 #include <chrono>
 #include "Chip8.h"
@@ -13,31 +14,25 @@ Display::Display()
 
 void Display::clear()
 {
-    for (int x = 0; x < 64; x++)
-	for (int y = 0; y < 32; y++)
-	    display[x][y] = 0x0;
+    for (int y = 0; y < 32; y++)
+	    display[y] = 0x0000000;
 }
 
-unsigned char Display::drawsprite(unsigned short x, unsigned short y, const unsigned char *sprite, unsigned short bytecount)
+uint8_t Display::drawsprite(int x, int y, int len, const uint8_t *sprite)
 {
-    unsigned char unset = 0x00;
-    
+    bool overwrite = false;
     x %= 64;
     y %= 32;
     
-    for (int row = 0; row < bytecount && y+row < 32; row++) {
-	for (int i = 0; i < 8; i++) {
-	    unsigned char pixelstate = (sprite[row] >> 7-i) & 0x1;
-	    if (x+i < 64) {
-		unsigned char temp = display[x+i][y+row];
-		display[x+i][y+row] ^= pixelstate;
-		if (temp && !display[x+i][y+row])
-		    unset = 0x01;
-	    }
-	}
+    for (int row = 0; row < len; row++) {
+        uint64_t zeroPos = ((uint64_t)sprite[row]) << 56;
+        uint64_t spriteRow = (zeroPos >> x) | (zeroPos << (64 - x));
+        display[(y+row) % 32] ^= spriteRow;
+        if ((display[(y+row) % 32] & spriteRow) != spriteRow)
+            overwrite = true;
     }
 
-    return unset;
+    return overwrite ? 0x01 : 0x00;
 }
 
 void Display::updatescreen()
@@ -50,7 +45,7 @@ void Display::updatescreen()
     for (int y = 0; y < 32; y++) {
 	std::cout << '|';
 	for (int x = 0; x < 64; x++) {
-	    if (display[x][y]) {
+	    if ((display[y] >> (63-x)) & 1) {
 		std::cout << '#';
 	    } else {
 		std::cout << ' ';
@@ -72,7 +67,7 @@ void Display::updatescreen()
  *  Memory Implementation
  */
 
-Memory::Memory()
+MemoryFile::MemoryFile()
 {
     for (int i = 0; i < 4096; i++) {
 	mem[i] = 0;
@@ -103,39 +98,9 @@ Memory::Memory()
     }
 }
 
-unsigned char& Memory::operator[](unsigned short addr)
+unsigned char& MemoryFile::operator[](unsigned short addr)
 {
     if (addr >= 0x0 && addr <= 0xFFF)
 	return mem[addr];
     return mem[0x0];
-}
-
-Opcode Memory::getop(unsigned short addr)
-{
-    Opcode fetchedcode {mem[addr] << 8 | mem[addr+1]};
-    return fetchedcode;
-}
-
-
-/*
- * Timer Implementation
- */
-
-void countdown(Timer& t, bool& run)
-{
-    using namespace std::chrono;
-    using namespace std::chrono_literals;
-
-    system_clock::time_point countend;
-    
-    while (run) {
-	countend = system_clock::now() + 16666667ns;
-	
-        t.mtx.lock();
-	if (t.count > 0)
-	    t.count--;
-	t.mtx.unlock();
-	
-	std::this_thread::sleep_until(countend);
-    }
 }
