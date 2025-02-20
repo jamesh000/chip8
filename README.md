@@ -4,6 +4,6 @@ It's a chip8 interpreter written in C++, what else can you say. Currently finish
 Just run `make` to build it. Currently no good mechanism for loading programs.
 
 - [X] Core refactor
-- [ ] Quality of Life (loading commands, psuedo-assembler)
+- [ ] Quality of Life (loading commands, quasi-assembler)
 - [ ] Graphical Interface
 - [ ] Implement all commands
