@@ -1,6 +1,8 @@
-#include <cstdint>
-#include <iostream>
 #include "hardware.hpp"
+#include <SDL2/SDL_error.h>
+#include <SDL2/SDL_events.h>
+#include <SDL2/SDL_render.h>
+#include <SDL2/SDL_video.h>
 
 /*
  *  Display Implementation
@@ -8,13 +10,36 @@
 
 Display::Display()
 {
+    // Initialize SDL
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        std::cout << "SDL couldn't initialize: " << SDL_GetError() << std::endl;
+    }
+
+    // Create the window
+    win = SDL_CreateWindow("Chip8", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, winWidth, winHeight, SDL_WINDOW_SHOWN);
+    if (win == NULL) {
+        std::cerr << "Window didn't work: " << SDL_GetError() << std::endl;
+        exit(1);
+    }
+
+    // Create the renderer
+    renderer = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
+    if (renderer == NULL) {
+        std::cerr << "Renderer didn't work: " << SDL_GetError() << std::endl;
+        exit(1);
+    }
+
+    // Clear the screen
     clear();
 }
 
 void Display::clear()
 {
     for (int y = 0; y < 32; y++)
-	    display[y] = 0x0000000;
+	    display[y] = 0x00000000;
+    
+    clearWindow();
+    SDL_RenderPresent(renderer);
 }
 
 uint8_t Display::drawsprite(int x, int y, int len, const uint8_t *sprite)
@@ -36,31 +61,49 @@ uint8_t Display::drawsprite(int x, int y, int len, const uint8_t *sprite)
 
 void Display::updatescreen()
 {
-    std::cout << ' ';
-    for (int i = 0; i < 64; i++)
-	std::cout << '-';
-    std::cout << std::endl;
-    
+    clearWindow();
     for (int y = 0; y < 32; y++) {
-	std::cout << '|';
 	for (int x = 0; x < 64; x++) {
 	    if ((display[y] >> (63-x)) & 1) {
-		std::cout << '#';
-	    } else {
-		std::cout << ' ';
+		drawPixel(x, y);
 	    }
 	}
-	std::cout << '|' << std::endl;
     }
     
-    std::cout << ' ';
-    for (int i = 0; i < 64; i++)
-	std::cout << '-';
-    std::cout << std::endl;
-    
-    std::cout << std::endl;
+    SDL_RenderPresent(renderer);
 }
 
+bool Display::pollEvents()
+{
+    while (SDL_PollEvent(&e) != 0) {
+        if (e.type == SDL_QUIT)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Display::clearWindow()
+{
+    SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+    SDL_RenderClear(renderer);
+}
+
+void Display::drawPixel(int x, int y)
+{
+    int unitX = winWidth/64, unitY = winHeight/32;
+    SDL_Rect pixel = {x * unitX, y * unitY, unitX, unitY};
+    SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
+    SDL_RenderFillRect(renderer, &pixel);
+}
+
+Display::~Display()
+{
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(win);
+    SDL_Quit();
+}
 
 /*
  *  Memory Implementation

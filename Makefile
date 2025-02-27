@@ -1,5 +1,7 @@
+LIB = -lSDL2 -lSDL2main
+
 chip8: main.o chip8.o hardware.o
-	$(CXX) $^ -pthread -o $@
+	$(CXX) $^ -pthread -o $@ $(LIB)
 
 main.o: main.cpp chip8.hpp
 	$(CXX) -c main.cpp

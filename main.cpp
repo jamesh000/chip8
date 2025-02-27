@@ -15,7 +15,7 @@ int main()
         0xC3, 0x1F, // 8 - random number from 0-31 in V3
         0xD2, 0x35, // a - draw character
         0x22, 0x10, // c - time killer subroutine
-        0x12, 0x00, // e - restart
+        0x12, 0x02, // e - restart
         // 0x210
         0x64, 0x3C, // 0 - load 60 into V4
         0xF4, 0x15, // 2 - move VA into delay timer

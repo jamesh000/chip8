@@ -1,17 +1,30 @@
 #ifndef HARDWAREHPP
 #define HARDWAREHPP
+#include <SDL2/SDL_events.h>
+#include <SDL2/SDL_render.h>
+#include <iostream>
 #include <cstdint>
+#include <SDL2/SDL.h>
 
 // Implements a Chip 8 style display
 class Display {
 public:
     Display();
+    ~Display();
     
     void clear();
     uint8_t drawsprite(int x, int y, int len, const uint8_t *sprite);
     void updatescreen();
+    bool pollEvents();
 private:
+    void clearWindow();
+    void drawPixel(int x, int y);
+    
+    const int winWidth = 1280, winHeight = 640;
     uint64_t display[32];
+    SDL_Window* win = NULL;
+    SDL_Renderer* renderer = NULL;
+    SDL_Event e;
 };
 
 // Implements Chip 8 style memory

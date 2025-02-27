@@ -69,7 +69,7 @@ int Chip8::exec(uint16_t opc)
             break;
         case 0x0000:
             // 0NNN - execute machine language subroutine at address NNN
-            // not implemented
+            // not feasible to implement on modern hardware
             return 2;
             break;
         default:
@@ -301,6 +301,11 @@ int Chip8::run()
                 soundTimer--;
             // reset
             tenCycle = 10;
+        }
+
+        if (screen.pollEvents()) {
+            std::cout << "terminating..." << std::endl;
+            exit(1);
         }
         
         // increment 
