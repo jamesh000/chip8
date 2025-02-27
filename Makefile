@@ -1,11 +1,18 @@
-Chip8: Main.o Chip8.o Hardware.o
-	$(CXX) $^ -pthread -o $@
+LIB = -lSDL2 -lSDL2main
 
-Main.o: Main.cpp Chip8.h
-	$(CXX) -c Main.cpp
+chip8: main.o chip8.o hardware.o
+	$(CXX) $^ -pthread -o $@ $(LIB)
 
-Chip8.o: Chip8.cpp Chip8.h
-	$(CXX) -c Chip8.cpp
+main.o: main.cpp chip8.hpp
+	$(CXX) -c main.cpp
 
-Hardware.o: Hardware.cpp Chip8.h
-	$(CXX) -c Hardware.cpp
+chip8.o: chip8.cpp chip8.hpp
+	$(CXX) -c chip8.cpp
+
+hardware.o: hardware.cpp hardware.hpp
+	$(CXX) -c hardware.cpp
+
+chip8.hpp: hardware.hpp
+
+clean:
+	rm chip8 *.o

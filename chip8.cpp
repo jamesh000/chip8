@@ -1,32 +1,4 @@
-#include <chrono>
-#include <cstdint>
-#include <exception>
-#include <iostream>
-#include <random>
-#include <string>
-#include "Chip8.h"
-
-// Register file
-RegisterFile::RegisterFile()
-{
-    for (int i = 0; i < 16; i++) {
-	registers[i] = 0;
-    }
-}
-
-void RegisterFile::saveRange(int lastReg,  uint16_t addr, MemoryFile& mem)
-{
-    for (int i = 0; i < lastReg; i++) {
-        mem[addr+i] = registers[i];
-    }
-}
-
-void RegisterFile::loadRange(int lastReg,  uint16_t addr, MemoryFile& mem)
-{
-    for (int i = 0; i < lastReg; i++) {
-        registers[i] = mem[addr+i];
-    }
-}
+#include "chip8.hpp"
 
 /*
  *  Implementation of Chip 8 Machine
@@ -81,6 +53,7 @@ int Chip8::exec(uint16_t opc)
     uint8_t N = opc & 0x000F;
     uint8_t NN = opc & 0x00FF;
     uint16_t NNN = opc & 0x0FFF;
+    uint8_t key;
     
     switch (opc & 0xF000) {
     case 0x0000:
@@ -97,7 +70,7 @@ int Chip8::exec(uint16_t opc)
             break;
         case 0x0000:
             // 0NNN - execute machine language subroutine at address NNN
-            // not implemented
+            // not feasible to implement on modern hardware
             return 2;
             break;
         default:
@@ -207,20 +180,21 @@ int Chip8::exec(uint16_t opc)
         break;
     case 0xD000:
         // DXYN - Draw sprite of length N at coordinates (VX, VY)
-        VF = screen.drawsprite(VX, VY, N, &memFile[I]);
+        VF = screen.drawSprite(VX, VY, N, &memFile[I]);
         draw = true;
         break;
     case 0xE000:
         switch (opc & 0x00FF) {
         case 0x009E:
             // EX9E - skip next instruction if key in VX is pressed
-            // to be implemented
-            return 2;
+            if (screen.keyPressed(VX))
+                pc += 2;
             break;
         case 0x00A1:
             // EXA1 - skip next instruction if key in VX is not pressed
             // to be implemented
-            return 2;
+            if (!screen.keyPressed(VX))
+                pc += 2;
             break;
         default:
             return 1;
@@ -234,8 +208,10 @@ int Chip8::exec(uint16_t opc)
             break;
         case 0x000A:
             // FX0A - wait for a keypress and store in register VX
-            // to be implemented
-            return 2;
+            key = screen.waitKey();
+            if (key == 0xFF) // if exit during wait
+                return 3;
+            VX = key;
             break;
         case 0x0015:
             // FX15 - set the delay timer to VX
@@ -312,6 +288,8 @@ int Chip8::run()
         } else if (result == 2) {
             std::cout << "Chip 8 instruction 0x" << std::hex << opc << " at address " << std::hex << pc << " not yet implemented" << std::endl;
             throw std::exception{};
+        } else if (result == 3) {
+            return 0;
         }
 
 
@@ -319,7 +297,7 @@ int Chip8::run()
         if (tenCycle == 0) {
             // Draw if anything to draw
             if (draw) {
-                screen.updatescreen();
+                screen.updateScreen();
                 draw = false;
             }
             // Decrement Timers
@@ -329,6 +307,11 @@ int Chip8::run()
                 soundTimer--;
             // reset
             tenCycle = 10;
+        }
+
+        if (screen.pollEvents()) {
+            std::cout << "terminating..." << std::endl;
+            exit(1);
         }
         
         // increment 
