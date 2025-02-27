@@ -1,7 +1,6 @@
 #include <cstdint>
 #include <iostream>
-#include <chrono>
-#include "Chip8.h"
+#include "hardware.hpp"
 
 /*
  *  Display Implementation
@@ -103,4 +102,26 @@ unsigned char& MemoryFile::operator[](unsigned short addr)
     if (addr >= 0x0 && addr <= 0xFFF)
 	return mem[addr];
     return mem[0x0];
+}
+
+// Register file
+RegisterFile::RegisterFile()
+{
+    for (int i = 0; i < 16; i++) {
+	registers[i] = 0;
+    }
+}
+
+void RegisterFile::saveRange(int lastReg,  uint16_t addr, MemoryFile& mem)
+{
+    for (int i = 0; i < lastReg; i++) {
+        mem[addr+i] = registers[i];
+    }
+}
+
+void RegisterFile::loadRange(int lastReg,  uint16_t addr, MemoryFile& mem)
+{
+    for (int i = 0; i < lastReg; i++) {
+        registers[i] = mem[addr+i];
+    }
 }

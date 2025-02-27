@@ -1,6 +1,6 @@
 #include <cstdint>
 #include <iostream>
-#include "Chip8.h"
+#include "chip8.hpp"
 
 int main()
 {

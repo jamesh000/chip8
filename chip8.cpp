@@ -1,32 +1,4 @@
-#include <chrono>
-#include <cstdint>
-#include <exception>
-#include <iostream>
-#include <random>
-#include <string>
-#include "Chip8.h"
-
-// Register file
-RegisterFile::RegisterFile()
-{
-    for (int i = 0; i < 16; i++) {
-	registers[i] = 0;
-    }
-}
-
-void RegisterFile::saveRange(int lastReg,  uint16_t addr, MemoryFile& mem)
-{
-    for (int i = 0; i < lastReg; i++) {
-        mem[addr+i] = registers[i];
-    }
-}
-
-void RegisterFile::loadRange(int lastReg,  uint16_t addr, MemoryFile& mem)
-{
-    for (int i = 0; i < lastReg; i++) {
-        registers[i] = mem[addr+i];
-    }
-}
+#include "chip8.hpp"
 
 /*
  *  Implementation of Chip 8 Machine
