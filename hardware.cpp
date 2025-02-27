@@ -1,8 +1,12 @@
 #include "hardware.hpp"
 #include <SDL2/SDL_error.h>
 #include <SDL2/SDL_events.h>
+#include <SDL2/SDL_keyboard.h>
+#include <SDL2/SDL_keycode.h>
 #include <SDL2/SDL_render.h>
+#include <SDL2/SDL_scancode.h>
 #include <SDL2/SDL_video.h>
+#include <cstdint>
 
 /*
  *  Display Implementation
@@ -29,6 +33,8 @@ Display::Display()
         exit(1);
     }
 
+    keyStates = SDL_GetKeyboardState(NULL);
+
     // Clear the screen
     clear();
 }
@@ -42,7 +48,7 @@ void Display::clear()
     SDL_RenderPresent(renderer);
 }
 
-uint8_t Display::drawsprite(int x, int y, int len, const uint8_t *sprite)
+uint8_t Display::drawSprite(int x, int y, int len, const uint8_t *sprite)
 {
     bool overwrite = false;
     x %= 64;
@@ -59,7 +65,7 @@ uint8_t Display::drawsprite(int x, int y, int len, const uint8_t *sprite)
     return overwrite ? 0x01 : 0x00;
 }
 
-void Display::updatescreen()
+void Display::updateScreen()
 {
     clearWindow();
     for (int y = 0; y < 32; y++) {
@@ -82,6 +88,47 @@ bool Display::pollEvents()
         }
     }
     return false;
+}
+
+uint8_t Display::waitKey()
+{
+    bool waiting = true;
+    while (waiting) {
+        while (SDL_PollEvent(&e) != 0) {
+            if (e.type == SDL_QUIT) {
+                return 0xFF;
+            } else if (e.type == SDL_KEYDOWN) {
+                Uint32 key = e.key.keysym.sym;
+                if (SDLK_0 <= key && key <= SDLK_9)
+                    return key - SDLK_0;
+                if (SDLK_a <= key && key <= SDLK_f)
+                    return key - SDLK_a + 0xA;
+            }
+        }
+    }
+    return 0xFF;
+}
+
+bool Display::keyPressed(uint8_t key)
+{
+    while (SDL_PollEvent(&e) != 0) {
+        if (e.type == SDL_QUIT)
+        {
+            exit(0);
+        }
+        }
+
+    int scancode;
+    if (key == 0)
+        scancode = SDL_SCANCODE_0;
+    else if (1 <= key && key <= 9)
+        scancode = SDL_SCANCODE_1 + key-1;
+    else if (0xA <= key && key <= 0xF)
+        scancode = SDL_SCANCODE_A + key-0xA;
+    else
+        return false;
+
+    return keyStates[scancode];
 }
 
 void Display::clearWindow()

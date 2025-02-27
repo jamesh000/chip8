@@ -53,6 +53,7 @@ int Chip8::exec(uint16_t opc)
     uint8_t N = opc & 0x000F;
     uint8_t NN = opc & 0x00FF;
     uint16_t NNN = opc & 0x0FFF;
+    uint8_t key;
     
     switch (opc & 0xF000) {
     case 0x0000:
@@ -179,20 +180,21 @@ int Chip8::exec(uint16_t opc)
         break;
     case 0xD000:
         // DXYN - Draw sprite of length N at coordinates (VX, VY)
-        VF = screen.drawsprite(VX, VY, N, &memFile[I]);
+        VF = screen.drawSprite(VX, VY, N, &memFile[I]);
         draw = true;
         break;
     case 0xE000:
         switch (opc & 0x00FF) {
         case 0x009E:
             // EX9E - skip next instruction if key in VX is pressed
-            // to be implemented
-            return 2;
+            if (screen.keyPressed(VX))
+                pc += 2;
             break;
         case 0x00A1:
             // EXA1 - skip next instruction if key in VX is not pressed
             // to be implemented
-            return 2;
+            if (!screen.keyPressed(VX))
+                pc += 2;
             break;
         default:
             return 1;
@@ -206,8 +208,10 @@ int Chip8::exec(uint16_t opc)
             break;
         case 0x000A:
             // FX0A - wait for a keypress and store in register VX
-            // to be implemented
-            return 2;
+            key = screen.waitKey();
+            if (key == 0xFF) // if exit during wait
+                return 3;
+            VX = key;
             break;
         case 0x0015:
             // FX15 - set the delay timer to VX
@@ -284,6 +288,8 @@ int Chip8::run()
         } else if (result == 2) {
             std::cout << "Chip 8 instruction 0x" << std::hex << opc << " at address " << std::hex << pc << " not yet implemented" << std::endl;
             throw std::exception{};
+        } else if (result == 3) {
+            return 0;
         }
 
 
@@ -291,7 +297,7 @@ int Chip8::run()
         if (tenCycle == 0) {
             // Draw if anything to draw
             if (draw) {
-                screen.updatescreen();
+                screen.updateScreen();
                 draw = false;
             }
             // Decrement Timers

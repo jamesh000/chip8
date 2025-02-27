@@ -13,9 +13,11 @@ public:
     ~Display();
     
     void clear();
-    uint8_t drawsprite(int x, int y, int len, const uint8_t *sprite);
-    void updatescreen();
+    uint8_t drawSprite(int x, int y, int len, const uint8_t *sprite);
+    void updateScreen();
     bool pollEvents();
+    uint8_t waitKey();
+    bool keyPressed(uint8_t key);
 private:
     void clearWindow();
     void drawPixel(int x, int y);
@@ -25,6 +27,7 @@ private:
     SDL_Window* win = NULL;
     SDL_Renderer* renderer = NULL;
     SDL_Event e;
+    const Uint8* keyStates;
 };
 
 // Implements Chip 8 style memory
