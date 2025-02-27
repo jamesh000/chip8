@@ -7,6 +7,7 @@ Just run `make` to build it. Currently no good mechanism for loading programs.
 - [ ] Quality of Life (loading commands, quasi-assembler)
 - [X] Graphical Interface
 - [X] Implement all commands
+- [ ] Refactor again (how the program exits, naming schemes)
 
 Bugs to fix:
 - [ ] Something is causing either input or output to stutter
